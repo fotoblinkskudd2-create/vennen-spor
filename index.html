@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vennen Spør – demo</title>
+<style>
+:root{--bg:#0f1417;--card:#182026;--line:#2a343c;--txt:#e8eef2;--mut:#8fa0ab;--g:#2ecc71;--y:#f1c40f;--r:#e74c3c;--acc:#4fc3f7}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt)}
+header{padding:12px 20px;border-bottom:1px solid var(--line);display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+header h1{font-size:20px;margin:0}header small{color:var(--mut)}
+.ctl{margin-left:auto;display:flex;gap:12px;align-items:center;font-size:14px;color:var(--mut)}
+main{display:grid;grid-template-columns:300px 1fr 340px;gap:16px;padding:16px;max-width:1300px;margin:0 auto}
+@media(max-width:1000px){main{grid-template-columns:1fr}}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.panel h2{margin:0 0 12px;font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+button{font:inherit;border:0;border-radius:10px;padding:10px 14px;cursor:pointer;background:#26323a;color:var(--txt)}
+button:hover{filter:brightness(1.2)}button:disabled{opacity:.4;cursor:not-allowed}
+.big{width:100%;margin-top:8px;font-size:16px}
+.radar{position:relative;width:220px;height:220px;margin:8px auto 12px;border-radius:50%;background:radial-gradient(circle,#0d2a1d 0,#071510 70%);border:2px solid #1f5c3d;overflow:hidden}
+.radar::before,.radar::after{content:"";position:absolute;inset:25%;border:1px solid #1f5c3d;border-radius:50%}.radar::after{inset:45%}
+.sweep{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,rgba(46,204,113,.45),transparent 25%);animation:spin 3s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.blip{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--g);box-shadow:0 0 12px var(--g);left:60%;top:40%;transition:all 1s}
+.radar.alert{border-color:var(--r)}.radar.alert .sweep{background:conic-gradient(from 0deg,rgba(231,76,60,.55),transparent 25%);animation-duration:1s}
+.radar.alert .blip{background:var(--r);box-shadow:0 0 16px var(--r);top:78%;left:48%}
+.rstat{text-align:center;color:var(--mut);font-size:14px;min-height:20px}
+.note{font-size:12px;color:var(--mut);margin-top:12px;line-height:1.4}
+.conv{display:flex;flex-direction:column;height:100%}
+.bubbles{flex:1;min-height:220px;max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:4px}
+.b{max-width:80%;padding:10px 12px;border-radius:12px;font-size:16px}
+.b.ai{background:#123447;align-self:flex-start}.b.me{background:#2d3b2b;align-self:flex-end}.b.sys{background:transparent;color:var(--mut);font-size:13px;align-self:center}
+.answers{display:flex;gap:10px;margin-top:12px;align-items:center;flex-wrap:wrap}
+.answers .ja{background:var(--g);color:#062}.answers .nei{background:var(--r);color:#fff}
+.answers button{font-size:20px;padding:14px 28px}
+.cd{font-size:14px;color:var(--y);min-width:150px}
+.log{margin-top:16px;border-top:1px solid var(--line);padding-top:10px}
+.log h3{margin:0 0 6px;font-size:13px;color:var(--mut);display:flex;justify-content:space-between;align-items:center}
+.log ul{list-style:none;margin:0;padding:0;max-height:200px;overflow:auto;font-family:ui-monospace,monospace;font-size:12px}
+.log li{padding:3px 0;border-bottom:1px dashed #222c33}
+.phone{width:300px;margin:0 auto;border:10px solid #000;border-radius:36px;background:#f5f7f8;color:#1b2329;padding:18px 14px;min-height:560px;box-shadow:0 10px 30px #0008}
+.phone .top{text-align:center;font-weight:600;margin-bottom:10px}
+.status{border-radius:16px;padding:16px;color:#fff;text-align:center;font-size:20px;font-weight:700;transition:background .3s}
+.status small{display:block;font-weight:400;font-size:13px;margin-top:4px;opacity:.9}
+.status.green{background:var(--g)}.status.yellow{background:var(--y);color:#3a2f00}.status.red{background:var(--r);animation:pulse 1s infinite}
+@keyframes pulse{50%{filter:brightness(1.25)}}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.tile{background:#fff;border-radius:12px;padding:8px;text-align:center;font-size:12px;box-shadow:0 1px 3px #0002}
+.tile b{display:block;font-size:13px;margin-top:4px}
+.feed{list-style:none;padding:0;margin:0;font-size:13px;max-height:240px;overflow:auto}
+.feed li{background:#fff;border-radius:10px;padding:8px 10px;margin-bottom:6px;border-left:4px solid var(--g)}
+.feed li.yellow{border-color:var(--y)}.feed li.red{border-color:var(--r)}
+.feed time{color:#7a8a94;font-size:11px;display:block}
+</style>
+</head>
+<body>
+<header>
+  <h1>Vennen Spør</h1><small>Kamerafri radarboks + lokal stemme som spør før den varsler. Demo/simulering.</small>
+  <div class="ctl">
+    <label><input type="checkbox" id="demoTimer" checked> Kort timer (5 s)</label>
+    <label><input type="checkbox" id="voiceOn" checked> Stemme</label>
+    <button id="notifBtn" title="Nettleservarsler">🔔 Varsler</button>
+  </div>
+</header>
+<main>
+  <section class="panel">
+    <h2>Radarboks</h2>
+    <div class="radar" id="radar"><div class="sweep"></div><div class="blip"></div></div>
+    <div class="rstat" id="radarStatus">Overvåker rommet – ingen kamera</div>
+    <button class="big" id="btnFall">⚠️ Simuler fall</button>
+    <button class="big" id="btnPill">💊 Simuler glemt pille</button>
+    <button class="big" id="btnMove">🚶 Simuler bevegelse</button>
+    <p class="note">Ekte versjon: mmWave-radar (f.eks. 60 GHz) ser bevegelse/fall uten bilde. Stemme og tale-gjenkjenning kjøres lokalt i boksen. Ingenting sendes ut før samtalen er ferdig.</p>
+  </section>
+
+  <section class="panel conv">
+    <h2>Samtale</h2>
+    <div class="bubbles" id="bubbles"><div class="b sys">Venter på hendelse fra radaren …</div></div>
+    <div class="answers">
+      <button class="ja" id="btnJa" disabled>Ja</button>
+      <button class="nei" id="btnNei" disabled>Nei</button>
+      <button id="btnMic" disabled title="Svar med stemmen">🎤</button>
+      <span class="cd" id="countdown"></span>
+    </div>
+    <div class="log">
+      <h3>Hendelseslogg <button id="btnReset">Nullstill</button></h3>
+      <ul id="log"></ul>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Familie-app</h2>
+    <div class="phone">
+      <div class="top">👵 Mor – i dag</div>
+      <div class="status green" id="famStatus">Alt er bra<small id="famSub">Ingen hendelser</small></div>
+      <div class="tiles">
+        <div class="tile">🗣️ Pratet<b id="tTalk">–</b></div>
+        <div class="tile">💊 Medisin<b id="tMed">ikke registrert</b></div>
+        <div class="tile">🚶 Bevegelse<b id="tMove">0 min</b></div>
+      </div>
+      <ul class="feed" id="feed"></ul>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const KEY = 'vennenSpor.v1';
+const params = new URLSearchParams(location.search);
+const OVERRIDE = params.get('timeout') ? Number(params.get('timeout')) * 1000 : null; // for test
+
+const blank = () => ({ log: [], feed: [], status: 'green', statusSub: 'Ingen hendelser', lastTalk: null, med: null, moveMin: 0 });
+let S;
+try { S = Object.assign(blank(), JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { S = blank(); }
+const save = () => localStorage.setItem(KEY, JSON.stringify(S));
+
+const now = () => new Date();
+const hhmm = d => new Date(d).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+// ---------- render ----------
+function render() {
+  $('log').innerHTML = S.log.slice().reverse().map(e => `<li>${hhmm(e.t)} · ${esc(e.msg)}</li>`).join('') || '<li>Tom</li>';
+  $('feed').innerHTML = S.feed.slice().reverse().map(f => `<li class="${f.level}"><time>${hhmm(f.t)}</time>${esc(f.msg)}</li>`).join('') || '<li>Ingen varsler i dag</li>';
+  const st = $('famStatus');
+  st.className = 'status ' + S.status;
+  st.firstChild.nodeValue = { green: 'Alt er bra', yellow: 'Følg med', red: 'ALARM – trenger hjelp' }[S.status];
+  $('famSub').textContent = S.statusSub;
+  $('tTalk').textContent = S.lastTalk ? hhmm(S.lastTalk).slice(0, 5) : '–';
+  $('tMed').textContent = S.med === true ? 'tatt ✅' : S.med === false ? 'ikke tatt ❌' : 'ikke registrert';
+  $('tMove').textContent = S.moveMin + ' min';
+  document.body.dataset.status = S.status;
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function log(msg) { S.log.push({ t: now().toISOString(), msg }); save(); render(); }
+function notifyFamily(msg, level) {
+  S.feed.push({ t: now().toISOString(), msg, level }); save(); render();
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try { new Notification('Vennen Spør', { body: msg }); } catch {}
+  }
+}
+function setStatus(status, sub) { S.status = status; S.statusSub = sub; save(); render(); }
+
+// ---------- speech ----------
+let voice = null;
+function pickVoice() {
+  if (!('speechSynthesis' in window)) return;
+  const vs = speechSynthesis.getVoices();
+  voice = vs.find(v => /^(nb|no|nn)/i.test(v.lang)) || vs.find(v => /da|sv/i.test(v.lang)) || vs[0] || null;
+}
+if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function say(text) {
+  bubble(text, 'ai');
+  if (!$('voiceOn').checked || !('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'nb-NO'; if (voice) u.voice = voice; u.rate = 0.95;
+    speechSynthesis.speak(u);
+  } catch {}
+}
+function bubble(text, who) {
+  const d = document.createElement('div'); d.className = 'b ' + who; d.textContent = text;
+  $('bubbles').appendChild(d); $('bubbles').scrollTop = 1e6;
+}
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+function listen() {
+  if (!SR || !active) return;
+  try {
+    rec = new SR(); rec.lang = 'nb-NO'; rec.interimResults = false; rec.maxAlternatives = 3;
+    rec.onresult = e => {
+      const txt = [...e.results[0]].map(a => a.transcript.toLowerCase()).join(' ');
+      if (/\b(ja|jo|jada|joda|ok|greit)\b/.test(txt)) answer('ja', txt);
+      else if (/\b(nei|hjelp|au)\b/.test(txt)) answer('nei', txt);
+      else bubble('(hørte: «' + txt + '» – svar ja eller nei)', 'sys');
+    };
+    rec.onerror = () => {};
+    rec.start();
+  } catch {}
+}
+
+// ---------- dialog state machine ----------
+// active = { kind:'fall'|'pill', step:'ask'|'retry'|'call' }
+let active = null, timer = null, tick = null, deadline = 0;
+const timeoutMs = () => OVERRIDE ?? ($('demoTimer').checked ? 5000 : 15000);
+const Q = { fall: 'Gikk det bra?', pill: 'Har du tatt medisinen?' };
+const LABEL = { fall: 'Mulig fall', pill: 'Mulig glemt pille' };
+
+function enable(on) { $('btnJa').disabled = $('btnNei').disabled = !on; $('btnMic').disabled = !on || !SR;
+  $('btnFall').disabled = $('btnPill').disabled = on; }
+function startWait() {
+  clearTimers();
+  deadline = Date.now() + timeoutMs();
+  const upd = () => { const s = Math.max(0, Math.ceil((deadline - Date.now()) / 1000)); $('countdown').textContent = `Venter på svar … ${s} s`; };
+  upd(); tick = setInterval(upd, 250);
+  timer = setTimeout(noAnswer, timeoutMs());
+}
+function clearTimers() { clearTimeout(timer); clearInterval(tick); $('countdown').textContent = ''; }
+
+function trigger(kind) {
+  if (active) return;
+  active = { kind, step: 'ask' };
+  $('radar').classList.toggle('alert', kind === 'fall');
+  $('radarStatus').textContent = kind === 'fall' ? 'Radar: brå bevegelse mot gulvet' : 'Medisintid passert – ingen aktivitet ved pilleboks';
+  bubble('— ' + LABEL[kind] + ' oppdaget ' + hhmm(now()) + ' —', 'sys');
+  log(`RADAR: ${LABEL[kind]} oppdaget`);
+  if (S.status === 'green') setStatus('yellow', LABEL[kind] + ' – Vennen spør nå');
+  say(Q[kind]); enable(true); startWait(); listen();
+}
+
+function answer(a, heard) {
+  if (!active) return;
+  clearTimers(); try { rec && rec.abort(); } catch {}
+  bubble(heard ? `«${heard}»` : (a === 'ja' ? 'Ja' : 'Nei'), 'me');
+  S.lastTalk = now().toISOString(); save();
+  const { kind, step } = active;
+  if (step === 'ask' || step === 'retry') {
+    if (a === 'ja') {
+      if (kind === 'pill') S.med = true;
+      log(`SVAR: Ja → OK (${LABEL[kind].toLowerCase()} avkreftet)`);
+      say(kind === 'fall' ? 'Så bra. Jeg er her hvis du trenger meg.' : 'Flott, jeg noterer at medisinen er tatt.');
+      setStatus('green', kind === 'fall' ? 'Sjekket etter mulig fall – alt OK' : 'Medisin bekreftet tatt');
+      notifyFamily(kind === 'fall' ? 'Mulig fall sjekket: «Gikk bra». Alt er bra.' : 'Medisin tatt ✅', 'green');
+      return finish();
+    }
+    if (kind === 'pill') S.med = false;
+    log('SVAR: Nei → spør om familien skal varsles');
+    active.step = 'call';
+    say('Skal jeg ringe familien?');
+    return startWait();
+  }
+  if (step === 'call') {
+    if (a === 'ja') {
+      log('SVAR: Ja, ring → ALARM sendt til familien');
+      say('Jeg ringer familien nå. Bli der du er.');
+      alarm(kind === 'fall' ? 'Fall – ber om hjelp. Ring nå!' : 'Medisin ikke tatt – ønsker kontakt. Ring nå!');
+    } else {
+      log('SVAR: Nei, ikke ring → familie varslet (gul)');
+      say('Greit. Jeg sier ifra til familien at de kan ringe deg senere.');
+      setStatus('yellow', kind === 'fall' ? 'Mulig fall, ønsket ikke hjelp' : 'Medisin ikke tatt');
+      notifyFamily(kind === 'fall' ? 'Mulig fall. Sier hun klarer seg, men ring gjerne.' : 'Medisin ikke tatt. Ring gjerne og minn på.', 'yellow');
+    }
+    return finish();
+  }
+}
+
+function noAnswer() {
+  if (!active) return;
+  try { rec && rec.abort(); } catch {}
+  if (active.step === 'ask') {
+    active.step = 'retry';
+    log('INGEN SVAR → spør igjen');
+    say('Jeg hører deg ikke, svar hvis du kan. ' + Q[active.kind]);
+    startWait(); listen();
+    return;
+  }
+  log('INGEN SVAR → ALARM sendt til familien');
+  say('Jeg får ikke svar. Jeg varsler familien nå.');
+  alarm(active.kind === 'fall' ? 'Mulig fall – ingen svar. Ring nå!' : 'Ingen svar om medisin. Ring nå!');
+  finish();
+}
+function alarm(msg) { setStatus('red', msg); notifyFamily('🚨 ' + msg, 'red'); }
+function finish() {
+  active = null; clearTimers(); enable(false);
+  $('radar').classList.remove('alert'); $('radarStatus').textContent = 'Overvåker rommet – ingen kamera';
+  save(); render();
+}
+
+// ---------- wire ----------
+$('btnFall').onclick = () => trigger('fall');
+$('btnPill').onclick = () => trigger('pill');
+$('btnMove').onclick = () => { S.moveMin += 15; log('RADAR: Bevegelse registrert (+15 min)'); };
+$('btnJa').onclick = () => answer('ja');
+$('btnNei').onclick = () => answer('nei');
+$('btnMic').onclick = listen;
+$('btnReset').onclick = () => { finish(); S = blank(); save(); $('bubbles').innerHTML = '<div class="b sys">Nullstilt. Venter på hendelse …</div>'; render(); };
+$('notifBtn').onclick = () => { if ('Notification' in window) Notification.requestPermission(); };
+if (!('Notification' in window)) $('notifBtn').hidden = true;
+
+// simulated background activity
+setInterval(() => { if (!active) { S.moveMin += 1; save(); render(); } }, 60000);
+
+window.__VS = { get state() { return S; }, get active() { return active; } };
+render();
+})();
+</script>
+</body>
+</html>
