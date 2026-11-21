@@ -1,8 +1,9 @@
 const { chromium } = require(process.env.PW || 'playwright-core');
 const assert = require('assert');
-const URL = 'file:///workspace/vennen-spor/index.html';
+const path = require('path');
+const URL = 'file://' + path.join(__dirname, 'index.html');
 (async () => {
-  const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+  const b = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', args: ['--no-sandbox'] });
   const p = await b.newPage({ viewport: { width: 1300, height: 900 } });
   await p.addInitScript(() => {
     window.__cancels = 0; window.__aborts = 0;
@@ -59,7 +60,7 @@ const URL = 'file:///workspace/vennen-spor/index.html';
   assert.equal(s.status, 'red'); assert(s.log.some(m => /INGEN SVAR → ALARM/.test(m.msg)));
   assert(await p.isDisabled('#btnJa'));
   ok('Ingen svar (5 s) → spør igjen → rød ALARM');
-  await p.screenshot({ path: '/workspace/vennen-spor/screenshot.png', fullPage: true });
+  await p.screenshot({ path: path.join(__dirname, 'screenshot.png'), fullPage: true });
 
   // Persistence
   await p.reload(); s = await st();
