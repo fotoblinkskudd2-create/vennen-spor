@@ -110,7 +110,7 @@ const KEY = 'vennenSpor.v1';
 const params = new URLSearchParams(location.search);
 const OVERRIDE = params.get('timeout') ? Number(params.get('timeout')) * 1000 : null; // for test
 
-const blank = () => ({ log: [], feed: [], status: 'green', statusSub: 'Ingen hendelser', lastTalk: null, med: null, moveMin: 0 });
+const blank = () => ({ log: [], feed: [], status: 'green', statusSub: 'Ingen hendelser', lastTalk: null, med: null, moveMin: 0, dialog: null });
 let S;
 try { S = Object.assign(blank(), JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { S = blank(); }
 const save = () => localStorage.setItem(KEY, JSON.stringify(S));
@@ -181,26 +181,28 @@ function listen() {
 }
 
 // ---------- dialog state machine ----------
-// active = { kind:'fall'|'pill', step:'ask'|'retry'|'call' }
-let active = null, timer = null, tick = null, deadline = 0;
+// active = { kind:'fall'|'pill', step:'ask'|'retry'|'call', deadline } – persisted in S.dialog so a reload resumes it
+let active = S.dialog || null, timer = null, tick = null, deadline = active ? active.deadline : 0;
 const timeoutMs = () => OVERRIDE ?? ($('demoTimer').checked ? 5000 : 15000);
 const Q = { fall: 'Gikk det bra?', pill: 'Har du tatt medisinen?' };
 const LABEL = { fall: 'Mulig fall', pill: 'Mulig glemt pille' };
 
 function enable(on) { $('btnJa').disabled = $('btnNei').disabled = !on; $('btnMic').disabled = !on || !SR;
   $('btnFall').disabled = $('btnPill').disabled = on; }
-function startWait() {
+function startWait(ms) {
   clearTimers();
-  deadline = Date.now() + timeoutMs();
+  const dur = ms ?? timeoutMs();
+  deadline = Date.now() + dur;
+  if (active) { active.deadline = deadline; save(); }
   const upd = () => { const s = Math.max(0, Math.ceil((deadline - Date.now()) / 1000)); $('countdown').textContent = `Venter på svar … ${s} s`; };
   upd(); tick = setInterval(upd, 250);
-  timer = setTimeout(noAnswer, timeoutMs());
+  timer = setTimeout(noAnswer, dur);
 }
 function clearTimers() { clearTimeout(timer); clearInterval(tick); $('countdown').textContent = ''; }
 
 function trigger(kind) {
   if (active) return;
-  active = { kind, step: 'ask' };
+  active = S.dialog = { kind, step: 'ask' };
   $('radar').classList.toggle('alert', kind === 'fall');
   $('radarStatus').textContent = kind === 'fall' ? 'Radar: brå bevegelse mot gulvet' : 'Medisintid passert – ingen aktivitet ved pilleboks';
   bubble('— ' + LABEL[kind] + ' oppdaget ' + hhmm(now()) + ' —', 'sys');
@@ -262,7 +264,7 @@ function noAnswer() {
 }
 function alarm(msg) { setStatus('red', msg); notifyFamily('🚨 ' + msg, 'red'); }
 function finish() {
-  active = null; clearTimers(); enable(false);
+  active = S.dialog = null; clearTimers(); enable(false);
   $('radar').classList.remove('alert'); $('radarStatus').textContent = 'Overvåker rommet – ingen kamera';
   save(); render();
 }
@@ -280,6 +282,17 @@ if (!('Notification' in window)) $('notifBtn').hidden = true;
 
 // simulated background activity
 setInterval(() => { if (!active) { S.moveMin += 1; save(); render(); } }, 60000);
+
+// Resume an unanswered check that was in flight when the page reloaded
+if (active) {
+  $('radar').classList.toggle('alert', active.kind === 'fall');
+  $('radarStatus').textContent = active.kind === 'fall' ? 'Radar: brå bevegelse mot gulvet' : 'Medisintid passert – ingen aktivitet ved pilleboks';
+  bubble('— ' + LABEL[active.kind] + ': samtalen fortsetter etter reload —', 'sys');
+  say(active.step === 'call' ? 'Skal jeg ringe familien?' : 'Jeg hører deg ikke, svar hvis du kan. ' + Q[active.kind]);
+  enable(true);
+  startWait(Math.max(0, deadline - Date.now()));
+  listen();
+}
 
 window.__VS = { get state() { return S; }, get active() { return active; } };
 render();
