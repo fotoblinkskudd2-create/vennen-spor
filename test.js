@@ -88,6 +88,11 @@ const URL = 'file:///workspace/vennen-spor/index.html';
   assert.equal(s.status, 'yellow'); assert(s.log.some(m => /SVAR: Nei/.test(m.msg)));
   ok('Stemme «ikke greit» → Nei');
 
+  await reset(); await sayVoice('ok, hjelp meg'); await p.click('#btnFall');
+  await p.waitForTimeout(50); s = await st();
+  assert.equal(s.status, 'yellow'); assert(s.log.some(m => /SVAR: Nei/.test(m.msg)));
+  ok('Stemme «ok, hjelp meg» → Nei (nødsignal slår «ok»)');
+
   await reset(); await sayVoice('ja, ok'); await p.click('#btnFall');
   await p.waitForTimeout(50); s = await st();
   assert.equal(s.status, 'green'); assert(s.log.some(m => /SVAR: Ja/.test(m.msg)));

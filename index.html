@@ -175,8 +175,8 @@ function listen() {
       const ja = /\b(ja|jo|jada|joda|ok|greit)\b/.test(txt);
       const distress = /\b(hjelp|au)\b/.test(txt);
       if (neg) answer('nei', txt);
-      else if (ja || (active && active.step === 'call' && distress)) answer('ja', txt);
-      else if (distress) answer('nei', txt);
+      else if (distress) answer(active && active.step === 'call' ? 'ja' : 'nei', txt);
+      else if (ja) answer('ja', txt);
       else bubble('(hørte: «' + txt + '» – svar ja eller nei)', 'sys');
     };
     rec.onerror = () => {};
