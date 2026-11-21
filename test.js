@@ -77,6 +77,12 @@ const URL = 'file:///workspace/vennen-spor/index.html';
   assert(s.log.some(m => /SVAR: Nei/.test(m.msg)));
   ok('Stemme «nei, ikke ok» → Nei (ikke grønn)');
 
+  // At the call question, «ja … hjelp» must still read Ja → rød ALARM
+  await sayVoice('ja, jeg trenger hjelp'); await p.click('#btnMic');
+  await p.waitForTimeout(50); s = await st();
+  assert.equal(s.status, 'red'); assert(s.log.some(m => /ALARM/.test(m.msg)));
+  ok('Stemme «ja, jeg trenger hjelp» ved ring-spørsmål → Ja → rød ALARM');
+
   await reset(); await sayVoice('ikke greit'); await p.click('#btnFall');
   await p.waitForTimeout(50); s = await st();
   assert.equal(s.status, 'yellow'); assert(s.log.some(m => /SVAR: Nei/.test(m.msg)));
