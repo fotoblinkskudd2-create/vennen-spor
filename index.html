@@ -230,7 +230,7 @@ function answer(a, heard) {
     log('SVAR: Nei → spør om familien skal varsles');
     active.step = 'call';
     say('Skal jeg ringe familien?');
-    return startWait();
+    startWait(); return listen();
   }
   if (step === 'call') {
     if (a === 'ja') {

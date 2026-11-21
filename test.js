@@ -87,6 +87,26 @@ const URL = 'file://' + path.join(__dirname, 'index.html');
   assert.equal(s.status, 'red'); assert(s.log.some(m => /INGEN SVAR → ALARM/.test(m.msg)));
   ok('Reload midt i dialog → spør igjen → rød ALARM');
 
+  // Flow 5: voice answer on the "Skal jeg ringe familien?" step
+  await p.addInitScript(() => {
+    window.__recs = [];
+    class FakeSR {
+      constructor() { window.__recs.push(this); }
+      start() { this.started = true; }
+      abort() { window.__aborts++; }
+      say(txt) { this.onresult({ results: [[{ transcript: txt }]] }); }
+    }
+    window.SpeechRecognition = FakeSR;
+  });
+  await p.goto(URL); await reset();
+  await p.click('#btnFall'); await p.click('#btnNei');
+  const recs = await p.evaluate(() => window.__recs.filter(r => r.started).length);
+  assert(recs >= 2, 'listen() skal starte ny gjenkjenning på «ringe familien»-steget');
+  await p.evaluate(() => window.__recs.at(-1).say('ja'));
+  s = await st();
+  assert.equal(s.status, 'red'); assert(s.feed.some(f => f.level === 'red'));
+  ok('Stemme «ja» på «Skal jeg ringe familien?» → rød ALARM');
+
   // Reset
   await p.click('#btnReset'); s = await st(); assert.equal(s.log.length, 0); assert.equal(s.status, 'green');
   ok('Nullstill tømmer logg');
