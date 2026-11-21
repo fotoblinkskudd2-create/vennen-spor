@@ -4,6 +4,19 @@ const URL = 'file:///workspace/vennen-spor/index.html';
 (async () => {
   const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
   const p = await b.newPage({ viewport: { width: 1300, height: 900 } });
+  await p.addInitScript(() => {
+    window.__cancels = 0; window.__aborts = 0;
+    if (window.speechSynthesis) {
+      const orig = window.speechSynthesis.cancel.bind(window.speechSynthesis);
+      window.speechSynthesis.cancel = () => { window.__cancels++; orig(); };
+    }
+    class FakeSR {
+      start() {} abort() { window.__aborts++; } stop() {}
+      set lang(v) {} set interimResults(v) {} set maxAlternatives(v) {}
+      set onresult(f) {} set onerror(f) {}
+    }
+    window.SpeechRecognition = FakeSR;
+  });
   const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
   const st = () => p.evaluate(() => JSON.parse(JSON.stringify(window.__VS.state)));
   const reset = async () => { await p.click('#btnReset'); };
@@ -76,6 +89,15 @@ const URL = 'file:///workspace/vennen-spor/index.html';
   // Reset
   await p.click('#btnReset'); s = await st(); assert.equal(s.log.length, 0); assert.equal(s.status, 'green');
   ok('Nullstill tømmer logg');
+
+  // Reset stops speech + listening
+  await p.click('#btnFall'); // starts speechSynthesis + SpeechRecognition
+  const before = await p.evaluate(() => ({ c: window.__cancels, a: window.__aborts }));
+  await p.click('#btnReset');
+  const after = await p.evaluate(() => ({ c: window.__cancels, a: window.__aborts }));
+  assert(after.c > before.c, 'Nullstill kalte ikke speechSynthesis.cancel()');
+  assert(after.a > before.a, 'Nullstill avbrøt ikke speech recognition');
+  ok('Nullstill stopper tale og lytting');
 
   assert.deepEqual(errs, [], 'JS-feil: ' + errs.join('; '));
   console.log(`ALLE ${pass} TESTER OK, 0 JS-feil`);
