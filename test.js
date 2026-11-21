@@ -10,6 +10,17 @@ const URL = 'file:///workspace/vennen-spor/index.html';
   const lastLog = async () => (await st()).log.map(e => e.msg);
   let pass = 0; const ok = (n) => { pass++; console.log('PASS', n); };
 
+  // Stub SpeechRecognition so voice answers can be driven headless.
+  await p.addInitScript(() => {
+    class FakeSR {
+      constructor() { window.__lastRec = this; }
+      start() { const r = this; setTimeout(() => r.onresult && r.onresult({ results: [[{ transcript: window.__fakeTranscript || '' }]] }), 0); }
+      abort() {}
+    }
+    window.SpeechRecognition = FakeSR;
+    window.__fakeTranscript = '';
+  });
+  const sayVoice = async (t) => { await p.evaluate(x => { window.__fakeTranscript = x; }, t); };
   await p.goto(URL); await reset();
   // Flow 1: fall -> Ja
   await p.click('#btnFall');
@@ -58,6 +69,23 @@ const URL = 'file:///workspace/vennen-spor/index.html';
   await p.waitForTimeout(1300); await p.click('#btnJa'); s = await st();
   assert.equal(s.status, 'green');
   ok('Ingen svar → spør igjen → Ja → grønn');
+
+  // Flow 4: voice answers – negations must not match the ja-regex (ok/greit)
+  await reset(); await sayVoice('nei, ikke ok'); await p.click('#btnFall');
+  await p.waitForTimeout(50); s = await st();
+  assert.equal(s.status, 'yellow'); assert(await p.locator('.b.ai', { hasText: 'Skal jeg ringe familien?' }).count() === 1);
+  assert(s.log.some(m => /SVAR: Nei/.test(m.msg)));
+  ok('Stemme «nei, ikke ok» → Nei (ikke grønn)');
+
+  await reset(); await sayVoice('ikke greit'); await p.click('#btnFall');
+  await p.waitForTimeout(50); s = await st();
+  assert.equal(s.status, 'yellow'); assert(s.log.some(m => /SVAR: Nei/.test(m.msg)));
+  ok('Stemme «ikke greit» → Nei');
+
+  await reset(); await sayVoice('ja, ok'); await p.click('#btnFall');
+  await p.waitForTimeout(50); s = await st();
+  assert.equal(s.status, 'green'); assert(s.log.some(m => /SVAR: Ja/.test(m.msg)));
+  ok('Stemme «ja, ok» → Ja (grønn)');
 
   // Reset
   await p.click('#btnReset'); s = await st(); assert.equal(s.log.length, 0); assert.equal(s.status, 'green');
