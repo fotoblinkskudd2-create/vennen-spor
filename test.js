@@ -59,6 +59,20 @@ const URL = 'file:///workspace/vennen-spor/index.html';
   assert.equal(s.status, 'green');
   ok('Ingen svar → spør igjen → Ja → grønn');
 
+  // Flow 4: reload mid-dialog resumes the unanswered check
+  await reset(); await p.goto(URL + '?timeout=1');
+  await p.click('#btnFall');
+  assert(!(await p.isDisabled('#btnJa')));
+  await p.reload();
+  const act = await p.evaluate(() => window.__VS.active);
+  assert(act && act.step === 'ask', 'aktiv dialog må overleve reload');
+  assert(!(await p.isDisabled('#btnJa')), 'svar-knappene må være aktive etter reload');
+  await p.waitForTimeout(1400); s = await st();
+  assert(s.log.some(m => /spør igjen|ALARM/.test(m.msg)), 'retry/alarm må fyre etter reload');
+  await p.waitForTimeout(1600); s = await st();
+  assert.equal(s.status, 'red'); assert(s.log.some(m => /INGEN SVAR → ALARM/.test(m.msg)));
+  ok('Reload midt i dialog → spør igjen → rød ALARM');
+
   // Reset
   await p.click('#btnReset'); s = await st(); assert.equal(s.log.length, 0); assert.equal(s.status, 'green');
   ok('Nullstill tømmer logg');
