@@ -18,7 +18,7 @@ Logg og status lagres i `localStorage`. «Nullstill» tømmer alt. `?timeout=1` 
 ## Test
 ```
 npm i playwright-core
-PW=playwright-core node test.js   # bruker /usr/bin/google-chrome
+PW=playwright-core node test.js   # kjører mot index.html i samme mappe; sett CHROME_PATH til din Chrome hvis den ikke er /usr/bin/google-chrome
 ```
 Dekker: Ja, Nei→ring, Nei→ikke ring, ingen svar→alarm, ingen svar→Ja på nytt forsøk, lagring etter reload, nullstill.
 
