@@ -274,7 +274,11 @@ $('btnMove').onclick = () => { S.moveMin += 15; log('RADAR: Bevegelse registrert
 $('btnJa').onclick = () => answer('ja');
 $('btnNei').onclick = () => answer('nei');
 $('btnMic').onclick = listen;
-$('btnReset').onclick = () => { finish(); S = blank(); save(); $('bubbles').innerHTML = '<div class="b sys">Nullstilt. Venter på hendelse …</div>'; render(); };
+$('btnReset').onclick = () => {
+  try { rec && rec.abort(); rec = null; } catch {}
+  if ('speechSynthesis' in window) try { speechSynthesis.cancel(); } catch {}
+  finish(); S = blank(); save(); $('bubbles').innerHTML = '<div class="b sys">Nullstilt. Venter på hendelse …</div>'; render();
+};
 $('notifBtn').onclick = () => { if ('Notification' in window) Notification.requestPermission(); };
 if (!('Notification' in window)) $('notifBtn').hidden = true;
 
