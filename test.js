@@ -18,6 +18,15 @@ const URL = 'file:///workspace/vennen-spor/index.html';
     window.SpeechRecognition = FakeSR;
   });
   const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
+  await p.addInitScript(() => {
+    window.__recs = [];
+    class MockSR {
+      constructor() { this.started = false; this.aborted = false; window.__recs.push(this); }
+      start() { this.started = true; }
+      abort() { this.aborted = true; window.__aborts++; }
+    }
+    window.SpeechRecognition = MockSR;
+  });
   const st = () => p.evaluate(() => JSON.parse(JSON.stringify(window.__VS.state)));
   const reset = async () => { await p.click('#btnReset'); };
   const lastLog = async () => (await st()).log.map(e => e.msg);
@@ -85,6 +94,14 @@ const URL = 'file:///workspace/vennen-spor/index.html';
   await p.waitForTimeout(1600); s = await st();
   assert.equal(s.status, 'red'); assert(s.log.some(m => /INGEN SVAR → ALARM/.test(m.msg)));
   ok('Reload midt i dialog → spør igjen → rød ALARM');
+
+  // Mic button while a recognizer is already listening: exactly one live recognizer
+  await reset(); await p.click('#btnFall');
+  await p.click('#btnMic'); await p.click('#btnMic');
+  const recs = await p.evaluate(() => window.__recs.map(r => ({ started: r.started, aborted: r.aborted })));
+  const live = recs.filter(r => r.started && !r.aborted);
+  assert.equal(live.length, 1, 'forventet nøyaktig én aktiv recognizer, fikk ' + live.length + ' av ' + recs.length);
+  ok('Mikknapp mens lytting pågår → kun én aktiv recognizer (gamle avbrutt)');
 
   // Reset
   await p.click('#btnReset'); s = await st(); assert.equal(s.log.length, 0); assert.equal(s.status, 'green');
