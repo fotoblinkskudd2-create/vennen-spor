@@ -4,22 +4,25 @@ const URL = 'file:///workspace/vennen-spor/index.html';
 (async () => {
   const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
   const p = await b.newPage({ viewport: { width: 1300, height: 900 } });
+  // Stub SpeechRecognition (fires a fake transcript; counts aborts) + count speechSynthesis.cancel calls.
+  await p.addInitScript(() => {
+    window.__cancels = 0; window.__aborts = 0; window.__fakeTranscript = '';
+    if (window.speechSynthesis) {
+      const orig = window.speechSynthesis.cancel.bind(window.speechSynthesis);
+      window.speechSynthesis.cancel = () => { window.__cancels++; orig(); };
+    }
+    class FakeSR {
+      start() { const r = this; setTimeout(() => r.onresult && r.onresult({ results: [[{ transcript: window.__fakeTranscript }]] }), 0); }
+      abort() { window.__aborts++; }
+      stop() {}
+    }
+    window.SpeechRecognition = FakeSR;
+  });
   const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
   const st = () => p.evaluate(() => JSON.parse(JSON.stringify(window.__VS.state)));
   const reset = async () => { await p.click('#btnReset'); };
   const lastLog = async () => (await st()).log.map(e => e.msg);
   let pass = 0; const ok = (n) => { pass++; console.log('PASS', n); };
-
-  // Stub SpeechRecognition so voice answers can be driven headless.
-  await p.addInitScript(() => {
-    class FakeSR {
-      constructor() { window.__lastRec = this; }
-      start() { const r = this; setTimeout(() => r.onresult && r.onresult({ results: [[{ transcript: window.__fakeTranscript || '' }]] }), 0); }
-      abort() {}
-    }
-    window.SpeechRecognition = FakeSR;
-    window.__fakeTranscript = '';
-  });
   const sayVoice = async (t) => { await p.evaluate(x => { window.__fakeTranscript = x; }, t); };
   await p.goto(URL); await reset();
   // Flow 1: fall -> Ja
@@ -98,9 +101,32 @@ const URL = 'file:///workspace/vennen-spor/index.html';
   assert.equal(s.status, 'green'); assert(s.log.some(m => /SVAR: Ja/.test(m.msg)));
   ok('Stemme «ja, ok» → Ja (grønn)');
 
+  // Flow 5: reload mid-dialog resumes the unanswered check
+  await reset(); await p.goto(URL + '?timeout=1');
+  await p.click('#btnFall');
+  assert(!(await p.isDisabled('#btnJa')));
+  await p.reload();
+  const act = await p.evaluate(() => window.__VS.active);
+  assert(act && act.step === 'ask', 'aktiv dialog må overleve reload');
+  assert(!(await p.isDisabled('#btnJa')), 'svar-knappene må være aktive etter reload');
+  await p.waitForTimeout(1400); s = await st();
+  assert(s.log.some(m => /spør igjen|ALARM/.test(m.msg)), 'retry/alarm må fyre etter reload');
+  await p.waitForTimeout(1600); s = await st();
+  assert.equal(s.status, 'red'); assert(s.log.some(m => /INGEN SVAR → ALARM/.test(m.msg)));
+  ok('Reload midt i dialog → spør igjen → rød ALARM');
+
   // Reset
   await p.click('#btnReset'); s = await st(); assert.equal(s.log.length, 0); assert.equal(s.status, 'green');
   ok('Nullstill tømmer logg');
+
+  // Reset stops speech + listening
+  await p.click('#btnFall'); // starts speechSynthesis + SpeechRecognition
+  const before = await p.evaluate(() => ({ c: window.__cancels, a: window.__aborts }));
+  await p.click('#btnReset');
+  const after = await p.evaluate(() => ({ c: window.__cancels, a: window.__aborts }));
+  assert(after.c > before.c, 'Nullstill kalte ikke speechSynthesis.cancel()');
+  assert(after.a > before.a, 'Nullstill avbrøt ikke speech recognition');
+  ok('Nullstill stopper tale og lytting');
 
   assert.deepEqual(errs, [], 'JS-feil: ' + errs.join('; '));
   console.log(`ALLE ${pass} TESTER OK, 0 JS-feil`);
