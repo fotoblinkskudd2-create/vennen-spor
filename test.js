@@ -5,7 +5,7 @@ const URL = 'file://' + path.join(__dirname, 'index.html');
 (async () => {
   const b = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', args: ['--no-sandbox'] });
   const p = await b.newPage({ viewport: { width: 1300, height: 900 } });
-  // Stub SpeechRecognition (fires a fake transcript; counts aborts) + count speechSynthesis.cancel calls.
+  // Stub SpeechRecognition (fires the queued fake transcript once; counts aborts) + count speechSynthesis.cancel calls.
   await p.addInitScript(() => {
     window.__cancels = 0; window.__aborts = 0; window.__fakeTranscript = '';
     if (window.speechSynthesis) {
@@ -13,7 +13,10 @@ const URL = 'file://' + path.join(__dirname, 'index.html');
       window.speechSynthesis.cancel = () => { window.__cancels++; orig(); };
     }
     class FakeSR {
-      start() { const r = this; setTimeout(() => r.onresult && r.onresult({ results: [[{ transcript: window.__fakeTranscript }]] }), 0); }
+      start() {
+        const t = window.__fakeTranscript; window.__fakeTranscript = '';
+        if (t) setTimeout(() => this.onresult && this.onresult({ results: [[{ transcript: t }]] }), 0);
+      }
       abort() { window.__aborts++; }
       stop() {}
     }
