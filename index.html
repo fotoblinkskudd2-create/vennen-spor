@@ -11,7 +11,7 @@ header{padding:12px 20px;border-bottom:1px solid var(--line);display:flex;gap:16
 header h1{font-size:20px;margin:0}header small{color:var(--mut)}
 .ctl{margin-left:auto;display:flex;gap:12px;align-items:center;font-size:14px;color:var(--mut)}
 main{display:grid;grid-template-columns:300px 1fr 340px;gap:16px;padding:16px;max-width:1300px;margin:0 auto}
-@media(max-width:1000px){main{grid-template-columns:1fr}}
+@media(max-width:1000px){main{grid-template-columns:minmax(0,1fr)}}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
 .panel h2{margin:0 0 12px;font-size:15px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
 button{font:inherit;border:0;border-radius:10px;padding:10px 14px;cursor:pointer;background:#26323a;color:var(--txt)}
@@ -38,7 +38,7 @@ button:hover{filter:brightness(1.2)}button:disabled{opacity:.4;cursor:not-allowe
 .log h3{margin:0 0 6px;font-size:13px;color:var(--mut);display:flex;justify-content:space-between;align-items:center}
 .log ul{list-style:none;margin:0;padding:0;max-height:200px;overflow:auto;font-family:ui-monospace,monospace;font-size:12px}
 .log li{padding:3px 0;border-bottom:1px dashed #222c33}
-.phone{width:300px;margin:0 auto;border:10px solid #000;border-radius:36px;background:#f5f7f8;color:#1b2329;padding:18px 14px;min-height:560px;box-shadow:0 10px 30px #0008}
+.phone{width:100%;max-width:300px;margin:0 auto;border:10px solid #000;border-radius:36px;background:#f5f7f8;color:#1b2329;padding:18px 14px;min-height:560px;box-shadow:0 10px 30px #0008}
 .phone .top{text-align:center;font-weight:600;margin-bottom:10px}
 .status{border-radius:16px;padding:16px;color:#fff;text-align:center;font-size:20px;font-weight:700;transition:background .3s}
 .status small{display:block;font-weight:400;font-size:13px;margin-top:4px;opacity:.9}
@@ -172,8 +172,12 @@ function listen() {
     rec = new SR(); rec.lang = 'nb-NO'; rec.interimResults = false; rec.maxAlternatives = 3;
     rec.onresult = e => {
       const txt = [...e.results[0]].map(a => a.transcript.toLowerCase()).join(' ');
-      if (/\b(ja|jo|jada|joda|ok|greit)\b/.test(txt)) answer('ja', txt);
-      else if (/\b(nei|hjelp|au)\b/.test(txt)) answer('nei', txt);
+      const neg = /\b(nei|ikke)\b/.test(txt);
+      const ja = /\b(ja|jo|jada|joda|ok|greit)\b/.test(txt);
+      const distress = /\b(hjelp|au)\b/.test(txt);
+      if (neg) answer('nei', txt);
+      else if (distress) answer(active && active.step === 'call' ? 'ja' : 'nei', txt);
+      else if (ja) answer('ja', txt);
       else bubble('(hørte: «' + txt + '» – svar ja eller nei)', 'sys');
     };
     rec.onerror = () => {};
@@ -231,7 +235,7 @@ function answer(a, heard) {
     log('SVAR: Nei → spør om familien skal varsles');
     active.step = 'call';
     say('Skal jeg ringe familien?');
-    return startWait();
+    startWait(); return listen();
   }
   if (step === 'call') {
     if (a === 'ja') {
