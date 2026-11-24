@@ -5,16 +5,17 @@ const URL = 'file://' + path.join(__dirname, 'index.html');
 (async () => {
   const b = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', args: ['--no-sandbox'] });
   const p = await b.newPage({ viewport: { width: 1300, height: 900 } });
+  // Stub SpeechRecognition (fires a fake transcript; counts aborts) + count speechSynthesis.cancel calls.
   await p.addInitScript(() => {
-    window.__cancels = 0; window.__aborts = 0;
+    window.__cancels = 0; window.__aborts = 0; window.__fakeTranscript = '';
     if (window.speechSynthesis) {
       const orig = window.speechSynthesis.cancel.bind(window.speechSynthesis);
       window.speechSynthesis.cancel = () => { window.__cancels++; orig(); };
     }
     class FakeSR {
-      start() {} abort() { window.__aborts++; } stop() {}
-      set lang(v) {} set interimResults(v) {} set maxAlternatives(v) {}
-      set onresult(f) {} set onerror(f) {}
+      start() { const r = this; setTimeout(() => r.onresult && r.onresult({ results: [[{ transcript: window.__fakeTranscript }]] }), 0); }
+      abort() { window.__aborts++; }
+      stop() {}
     }
     window.SpeechRecognition = FakeSR;
   });
@@ -23,7 +24,7 @@ const URL = 'file://' + path.join(__dirname, 'index.html');
   const reset = async () => { await p.click('#btnReset'); };
   const lastLog = async () => (await st()).log.map(e => e.msg);
   let pass = 0; const ok = (n) => { pass++; console.log('PASS', n); };
-
+  const sayVoice = async (t) => { await p.evaluate(x => { window.__fakeTranscript = x; }, t); };
   await p.goto(URL); await reset();
   // Flow 1: fall -> Ja
   await p.click('#btnFall');
@@ -73,7 +74,35 @@ const URL = 'file://' + path.join(__dirname, 'index.html');
   assert.equal(s.status, 'green');
   ok('Ingen svar → spør igjen → Ja → grønn');
 
-  // Flow 4: reload mid-dialog resumes the unanswered check
+  // Flow 4: voice answers – negations must not match the ja-regex (ok/greit)
+  await reset(); await sayVoice('nei, ikke ok'); await p.click('#btnFall');
+  await p.waitForTimeout(50); s = await st();
+  assert.equal(s.status, 'yellow'); assert(await p.locator('.b.ai', { hasText: 'Skal jeg ringe familien?' }).count() === 1);
+  assert(s.log.some(m => /SVAR: Nei/.test(m.msg)));
+  ok('Stemme «nei, ikke ok» → Nei (ikke grønn)');
+
+  // At the call question, «ja … hjelp» must still read Ja → rød ALARM
+  await sayVoice('ja, jeg trenger hjelp'); await p.click('#btnMic');
+  await p.waitForTimeout(50); s = await st();
+  assert.equal(s.status, 'red'); assert(s.log.some(m => /ALARM/.test(m.msg)));
+  ok('Stemme «ja, jeg trenger hjelp» ved ring-spørsmål → Ja → rød ALARM');
+
+  await reset(); await sayVoice('ikke greit'); await p.click('#btnFall');
+  await p.waitForTimeout(50); s = await st();
+  assert.equal(s.status, 'yellow'); assert(s.log.some(m => /SVAR: Nei/.test(m.msg)));
+  ok('Stemme «ikke greit» → Nei');
+
+  await reset(); await sayVoice('ok, hjelp meg'); await p.click('#btnFall');
+  await p.waitForTimeout(50); s = await st();
+  assert.equal(s.status, 'yellow'); assert(s.log.some(m => /SVAR: Nei/.test(m.msg)));
+  ok('Stemme «ok, hjelp meg» → Nei (nødsignal slår «ok»)');
+
+  await reset(); await sayVoice('ja, ok'); await p.click('#btnFall');
+  await p.waitForTimeout(50); s = await st();
+  assert.equal(s.status, 'green'); assert(s.log.some(m => /SVAR: Ja/.test(m.msg)));
+  ok('Stemme «ja, ok» → Ja (grønn)');
+
+  // Flow 5: reload mid-dialog resumes the unanswered check
   await reset(); await p.goto(URL + '?timeout=1');
   await p.click('#btnFall');
   assert(!(await p.isDisabled('#btnJa')));

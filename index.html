@@ -171,8 +171,12 @@ function listen() {
     rec = new SR(); rec.lang = 'nb-NO'; rec.interimResults = false; rec.maxAlternatives = 3;
     rec.onresult = e => {
       const txt = [...e.results[0]].map(a => a.transcript.toLowerCase()).join(' ');
-      if (/\b(ja|jo|jada|joda|ok|greit)\b/.test(txt)) answer('ja', txt);
-      else if (/\b(nei|hjelp|au)\b/.test(txt)) answer('nei', txt);
+      const neg = /\b(nei|ikke)\b/.test(txt);
+      const ja = /\b(ja|jo|jada|joda|ok|greit)\b/.test(txt);
+      const distress = /\b(hjelp|au)\b/.test(txt);
+      if (neg) answer('nei', txt);
+      else if (distress) answer(active && active.step === 'call' ? 'ja' : 'nei', txt);
+      else if (ja) answer('ja', txt);
       else bubble('(hørte: «' + txt + '» – svar ja eller nei)', 'sys');
     };
     rec.onerror = () => {};
