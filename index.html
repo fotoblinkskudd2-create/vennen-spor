@@ -167,6 +167,7 @@ const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
 function listen() {
   if (!SR || !active) return;
+  try { rec && rec.abort(); } catch {}
   try {
     rec = new SR(); rec.lang = 'nb-NO'; rec.interimResults = false; rec.maxAlternatives = 3;
     rec.onresult = e => {

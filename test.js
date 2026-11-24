@@ -5,17 +5,26 @@ const URL = 'file://' + path.join(__dirname, 'index.html');
 (async () => {
   const b = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', args: ['--no-sandbox'] });
   const p = await b.newPage({ viewport: { width: 1300, height: 900 } });
-  // Stub SpeechRecognition (fires a fake transcript; counts aborts) + count speechSynthesis.cancel calls.
+  // Stub SpeechRecognition: tracks instances, supports both automatic fake transcripts and manual say().
   await p.addInitScript(() => {
-    window.__cancels = 0; window.__aborts = 0; window.__fakeTranscript = '';
+    window.__cancels = 0; window.__aborts = 0; window.__fakeTranscript = ''; window.__recs = [];
     if (window.speechSynthesis) {
       const orig = window.speechSynthesis.cancel.bind(window.speechSynthesis);
       window.speechSynthesis.cancel = () => { window.__cancels++; orig(); };
     }
     class FakeSR {
-      start() { const r = this; setTimeout(() => r.onresult && r.onresult({ results: [[{ transcript: window.__fakeTranscript }]] }), 0); }
-      abort() { window.__aborts++; }
+      constructor() { this.started = false; this.aborted = false; window.__recs.push(this); }
+      start() {
+        this.started = true;
+        const r = this;
+        setTimeout(() => {
+          const txt = window.__fakeTranscript; window.__fakeTranscript = '';
+          if (!r.aborted && txt && r.onresult) r.onresult({ results: [[{ transcript: txt }]] });
+        }, 0);
+      }
+      abort() { this.aborted = true; window.__aborts++; }
       stop() {}
+      say(txt) { if (!this.aborted && this.onresult) this.onresult({ results: [[{ transcript: txt }]] }); }
     }
     window.SpeechRecognition = FakeSR;
   });
@@ -116,21 +125,19 @@ const URL = 'file://' + path.join(__dirname, 'index.html');
   assert.equal(s.status, 'red'); assert(s.log.some(m => /INGEN SVAR → ALARM/.test(m.msg)));
   ok('Reload midt i dialog → spør igjen → rød ALARM');
 
-  // Flow 5: voice answer on the "Skal jeg ringe familien?" step
-  await p.addInitScript(() => {
-    window.__recs = [];
-    class FakeSR {
-      constructor() { window.__recs.push(this); }
-      start() { this.started = true; }
-      abort() { window.__aborts++; }
-      say(txt) { this.onresult({ results: [[{ transcript: txt }]] }); }
-    }
-    window.SpeechRecognition = FakeSR;
-  });
+  // Mic button while a recognizer is already listening: exactly one live recognizer
+  await reset(); await p.click('#btnFall');
+  await p.click('#btnMic'); await p.click('#btnMic');
+  const recs = await p.evaluate(() => window.__recs.map(r => ({ started: r.started, aborted: r.aborted })));
+  const live = recs.filter(r => r.started && !r.aborted);
+  assert.equal(live.length, 1, 'forventet nøyaktig én aktiv recognizer, fikk ' + live.length + ' av ' + recs.length);
+  ok('Mikknapp mens lytting pågår → kun én aktiv recognizer (gamle avbrutt)');
+
+  // Voice answer on the "Skal jeg ringe familien?" step
   await p.goto(URL); await reset();
   await p.click('#btnFall'); await p.click('#btnNei');
-  const recs = await p.evaluate(() => window.__recs.filter(r => r.started).length);
-  assert(recs >= 2, 'listen() skal starte ny gjenkjenning på «ringe familien»-steget');
+  const recCount = await p.evaluate(() => window.__recs.filter(r => r.started).length);
+  assert(recCount >= 2, 'listen() skal starte ny gjenkjenning på «ringe familien»-steget');
   await p.evaluate(() => window.__recs.at(-1).say('ja'));
   s = await st();
   assert.equal(s.status, 'red'); assert(s.feed.some(f => f.level === 'red'));
